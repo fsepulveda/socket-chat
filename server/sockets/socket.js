@@ -1,20 +1,55 @@
 const { io } = require("../server");
+const { Users } = require("../classes/users");
+const { createMessage } = require("../utils/utils");
+
+const users = new Users();
 
 io.on("connection", client => {
-  console.log("User connected");
+  client.on("inChat", (user, callback) => {
+    if (!user.name || !user.room) {
+      return callback({
+        error: true,
+        message: `The name/room is required`
+      });
+    }
 
-  client.emit("sendMessage", {
-    user: "ADMIN",
-    message: "Welcome to application"
+    client.join(user.room);
+
+    const connectedUsers = users.addUser(client.id, user.name, user.room);
+
+    client.broadcast
+      .to(user.room)
+      .emit("listUsers", users.getUsersByRoom(user.room));
+
+    callback(connectedUsers);
+  });
+
+  client.on("createMessage", data => {
+    const user = users.getUser(client.id);
+    const message = createMessage(user.name, data.message);
+    client.broadcast.to(user.room).emit("createMessage", message);
   });
 
   client.on("disconnect", () => {
-    console.log("User disconnected");
+    const removedUser = users.removeUser(client.id);
+
+    client.broadcast
+      .to(removedUser.room)
+      .emit(
+        "createMessage",
+        createMessage("Administrator", `${removedUser.name} left`)
+      );
+    client.broadcast
+      .to(removedUser.room)
+      .emit("listUsers", users.getUsersByRoom(removedUser.room));
   });
 
-  client.on("sendMessage", (data, callback) => {
-    console.log("🚀 ~ file: socket.js ~ line 16 ~ client.on ~ data", data);
+  // Private messages
+  client.on("privateMessage", data => {
+    const user = users.getUser(client.id);
 
-    client.broadcast.emit("sendMessage", data);
+    client.broadcast
+      .to(data.to)
+      .emit("privateMessage", createMessage(user.name, data.message));
   });
 });
