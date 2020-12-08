@@ -20,14 +20,22 @@ io.on("connection", client => {
     client.broadcast
       .to(user.room)
       .emit("listUsers", users.getUsersByRoom(user.room));
+    client.broadcast
+      .to(user.room)
+      .emit(
+        "createMessage",
+        createMessage("Administrator", `${user.name} join to room`)
+      );
 
     callback(connectedUsers);
   });
 
-  client.on("createMessage", data => {
+  client.on("createMessage", (data, callback) => {
     const user = users.getUser(client.id);
     const message = createMessage(user.name, data.message);
     client.broadcast.to(user.room).emit("createMessage", message);
+
+    callback(message);
   });
 
   client.on("disconnect", () => {
